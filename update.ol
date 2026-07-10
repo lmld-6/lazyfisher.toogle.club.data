@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lazyfisher辅助增强OL
 // @namespace    https://lazyfisher.toogle.club/
-// @version      0.3.1
+// @version      0.4
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
 // @author       天雨灵泽
 // @match        *://toogle.club:36018/*
@@ -141,7 +141,7 @@ const FEATURES = [
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-const SCRIPT_VERSION = '0.3.1';
+const SCRIPT_VERSION = '0.4';
 
 function isEnabled(featureId) {
     var val = GM_getValue('feat_' + featureId);
