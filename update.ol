@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lazyfisher辅助增强OL
 // @namespace    https://lazyfisher.toogle.club/
-// @version      0.4
+// @version      0.5
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
 // @author       天雨灵泽
 // @match        *://toogle.club:36018/*
@@ -141,7 +141,7 @@ const FEATURES = [
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-const SCRIPT_VERSION = '0.4';
+const SCRIPT_VERSION = '0.5';
 
 function isEnabled(featureId) {
     var val = GM_getValue('feat_' + featureId);
@@ -4183,50 +4183,7 @@ function initCatchPlate() {
                 .message-card--catch.lz-ct-legendary{background:linear-gradient(135deg,#ef4444 0%,#fca5a5 15%,#fde68a 35%,#fffbeb 55%,#fff 100%)!important;animation:lz-legendary-bg 2.5s ease-in-out infinite}
                 .message-card--catch.lz-ct-legendary:hover{box-shadow:0 4px 18px rgba(239,68,68,.25)}
                 @keyframes lz-legendary-bg{0%,100%{background:linear-gradient(135deg,#ef4444 0%,#fca5a5 15%,#fde68a 35%,#fffbeb 55%,#fff 100%)!important}50%{background:linear-gradient(135deg,#dc2626 0%,#f87171 15%,#fbbf24 35%,#fef3c7 55%,#fff 100%)!important}}
-                
-                /* ========== 恢复评分条显示 ========== */
-                .catch-rating-bar {
-                    display: block !important; /* 重新显示评分条 */
-                    height: 6px;
-                    border-radius: 3px;
-                    margin-top: 8px;
-                    background: rgba(0,0,0,0.06);
-                    overflow: hidden;
-                    position: relative;
-                }
-                
-                .catch-rating-bar .catch-rating-fill {
-                    height: 100%;
-                    border-radius: 3px;
-                    transition: width 0.3s ease;
-                }
-                
-                /* 不同品质的评分条颜色 */
-                .lz-ct-shrimp .catch-rating-bar .catch-rating-fill {
-                    background: linear-gradient(90deg, #fbbf24, #f59e0b);
-                }
-                .lz-ct-gray .catch-rating-bar .catch-rating-fill {
-                    background: linear-gradient(90deg, #94a3b8, #64748b);
-                }
-                .lz-ct-green .catch-rating-bar .catch-rating-fill {
-                    background: linear-gradient(90deg, #4ade80, #22c55e);
-                }
-                .lz-ct-blue .catch-rating-bar .catch-rating-fill {
-                    background: linear-gradient(90deg, #60a5fa, #3b82f6);
-                }
-                .lz-ct-yellow .catch-rating-bar .catch-rating-fill {
-                    background: linear-gradient(90deg, #fbbf24, #f59e0b);
-                }
-                .lz-ct-legendary .catch-rating-bar .catch-rating-fill {
-                    background: linear-gradient(90deg, #ef4444, #dc2626, #fbbf24);
-                    animation: lz-legendary-bar 2s ease-in-out infinite;
-                }
-                
-                @keyframes lz-legendary-bar {
-                    0%, 100% { background: linear-gradient(90deg, #ef4444, #dc2626, #fbbf24); }
-                    50% { background: linear-gradient(90deg, #fbbf24, #ef4444, #dc2626); }
-                }
-                
+
                 .lz-ct-inner{display:flex;align-items:stretch;gap:0;position:relative}
                 .lz-ct-left{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
                 .lz-ct-right{flex-shrink:0;width:120px;display:flex;align-items:center;justify-content:center;overflow:visible}
@@ -4247,16 +4204,16 @@ function initCatchPlate() {
                 .lz-ct-fish-title{font-size:1.1em;font-weight:700;color:#0f172a;display:block;margin-bottom:2px;letter-spacing:.3px}
                 .lz-ct-info-row{font-size:.8em;color:#64748b;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
                 .lz-ct-spec{font-size:.85em;color:#64748b}
-                
-                /* 百分比显示 */
+
+                /* 百分比显示样式 */
                 .lz-ct-percentage {
                     font-size: 0.85em;
-                    font-weight: 700;
-                    margin-top: 4px;
-                    display: inline-block;
-                    padding: 2px 6px;
+                    font-weight: 600;
+                    color: #0f172a;
+                    margin-left: auto;
+                    padding: 1px 6px;
                     border-radius: 4px;
-                    background: rgba(0,0,0,0.04);
+                    background: rgba(0,0,0,0.03);
                 }
             `;
             document.head.appendChild(s);
@@ -4296,9 +4253,7 @@ function initCatchPlate() {
                 card.classList.add(info.cardClass);
 
                 const titleEl = card.querySelector('.message-title');
-                if (titleEl) {
-                    titleEl.innerHTML = '<span class="lz-ct-fish-title">' + info.name + '</span>';
-                }
+                if (titleEl) titleEl.innerHTML = '<span class="lz-ct-fish-title">' + info.name + '</span>';
 
                 // 重构detail内容：标签 + 规格 + 百分比
                 let detailHTML = '<div class="lz-ct-info-row">';
@@ -4306,33 +4261,10 @@ function initCatchPlate() {
                 if (info.rest) {
                     detailHTML += '<span class="lz-ct-spec">' + info.rest + '</span>';
                 }
-                detailHTML += '</div>';
-                
-                // 添加百分比显示
                 detailHTML += '<span class="lz-ct-percentage">' + info.score + '%</span>';
-                
-                detail.innerHTML = detailHTML;
+                detailHTML += '</div>';
 
-                // 处理评分条（如果存在）
-                const ratingBar = card.querySelector('.catch-rating-bar');
-                const ratingFill = card.querySelector('.catch-rating-bar .catch-rating-fill');
-                if (ratingFill) {
-                    ratingFill.style.width = info.score + '%';
-                }
-                
-                // 如果没有评分条但有评分数据，创建评分条
-                if (!ratingBar && info.score !== undefined) {
-                    const bar = document.createElement('div');
-                    bar.className = 'catch-rating-bar';
-                    const fill = document.createElement('div');
-                    fill.className = 'catch-rating-fill';
-                    fill.style.width = info.score + '%';
-                    bar.appendChild(fill);
-                    
-                    // 添加到detail后面或title下面
-                    const insertAfter = detail.nextElementSibling || detail;
-                    insertAfter.parentNode.insertBefore(bar, insertAfter.nextSibling);
-                }
+                detail.innerHTML = detailHTML;
 
                 const imgSrc = getFishImage(info.name);
                 const flex = card.querySelector('.flex.items-start');
