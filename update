@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lazyfisher辅助增强
 // @namespace    https://lazyfisher.toogle.club/
-// @version      0.2
+// @version      0.3
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
 // @author       天雨灵泽
 // @match        *://toogle.club:36018/*
@@ -14,6 +14,7 @@
 
 (function() {
     'use strict';
+
 // ===== 在线加载 FISH_DATABASE =====
 var FISH_DATABASE = [];
 window.__fishDbReady = false;
@@ -104,7 +105,7 @@ GM_xmlhttpRequest({
     }
 });
 // ============================================================
-// 功能开关管理 - 浮动按钮版
+// 功能开关管理 - 纯浮动按钮版 (v0.2)
 // ============================================================
 
 const FEATURES = [
@@ -122,7 +123,6 @@ const FEATURES = [
     { id: 'assemblySim', name: '装配台模拟器' },
     { id: 'skillRatio', name: '技能占比分析' },
     { id: 'hookStrength', name: '钩子拉力显示' },
-    { id: 'announceLogger', name: '公告记录器' },
     { id: 'fishWeightPred', name: '鱼体力预估体重' },
     { id: 'fishCardGradeColor', name: '鱼获卡片背景染色' },
     { id: 'fishCardGlow', name: '鱼获卡片动态辉光' },
@@ -145,11 +145,10 @@ const FEATURES = [
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-// 版本号（修改这里即可更新显示）
-const SCRIPT_VERSION = '0.2';
+const SCRIPT_VERSION = '0.3';
 
 function isEnabled(featureId) {
-    const val = GM_getValue('feat_' + featureId);
+    var val = GM_getValue('feat_' + featureId);
     return val !== undefined ? val : true;
 }
 
@@ -158,184 +157,180 @@ function setEnabled(featureId, enabled) {
 }
 
 function toggleFeature(featureId) {
-    const enabled = isEnabled(featureId);
+    var enabled = isEnabled(featureId);
     setEnabled(featureId, !enabled);
     alert('功能开关已更改，页面将刷新以应用设置。');
     location.reload();
 }
 
 function initFloatingPanel() {
+    // 防止重复初始化
+    if (document.getElementById('lazyfisher-toggle-btn')) return;
+
     // ============================================================
     // 样式注入
     // ============================================================
-    const styleId = 'lazyfisher-floating-panel-style';
-    if (!document.getElementById(styleId)) {
-        const style = document.createElement('style');
-        style.id = styleId;
-        style.textContent = `
-            #lazyfisher-toggle-btn {
-                position: fixed;
-                z-index: 99999;
-                width: 52px;
-                height: 52px;
-                border-radius: 50%;
-                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-                color: #e0e0e0;
-                font-size: 9px;
-                font-weight: bold;
-                text-align: center;
-                line-height: 52px;
-                cursor: grab;
-                user-select: none;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 20px rgba(100, 150, 255, 0.2);
-                border: 2px solid rgba(100, 150, 255, 0.4);
-                transition: box-shadow 0.3s, border-color 0.3s;
-                font-family: monospace;
-                letter-spacing: 1px;
-            }
-            #lazyfisher-toggle-btn:hover {
-                box-shadow: 0 6px 25px rgba(0,0,0,0.6), 0 0 30px rgba(100, 150, 255, 0.4);
-                border-color: rgba(100, 150, 255, 0.7);
-            }
-            #lazyfisher-toggle-btn:active {
-                cursor: grabbing;
-            }
-            #lazyfisher-toggle-btn.panel-open {
-                cursor: pointer;
-                opacity: 0;
-                pointer-events: none;
-            }
-
-            #lazyfisher-panel {
-                position: fixed;
-                z-index: 99998;
-                width: 300px;
-                max-height: 70vh;
-                background: rgba(20, 20, 40, 0.95);
-                border-radius: 12px;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 40px rgba(100, 150, 255, 0.15);
-                border: 1px solid rgba(100, 150, 255, 0.3);
-                display: none;
-                flex-direction: column;
-                overflow: hidden;
-                font-family: 'Segoe UI', sans-serif;
-            }
-            #lazyfisher-panel.visible {
-                display: flex;
-            }
-
-            #lazyfisher-panel-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 12px 16px;
-                background: rgba(0,0,0,0.3);
-                border-bottom: 1px solid rgba(100, 150, 255, 0.2);
-                cursor: grab;
-                user-select: none;
-            }
-            #lazyfisher-panel-header:active {
-                cursor: grabbing;
-            }
-            #lazyfisher-panel-title {
-                color: #a0c0ff;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            #lazyfisher-panel-count {
-                color: #888;
-                font-size: 11px;
-            }
-            #lazyfisher-panel-close {
-                width: 24px;
-                height: 24px;
-                border-radius: 50%;
-                background: rgba(255,255,255,0.1);
-                color: #aaa;
-                border: none;
-                cursor: pointer;
-                font-size: 14px;
-                text-align: center;
-                line-height: 24px;
-                transition: all 0.2s;
-            }
-            #lazyfisher-panel-close:hover {
-                background: rgba(255,80,80,0.3);
-                color: #fff;
-            }
-
-            #lazyfisher-panel-body {
-                flex: 1;
-                overflow-y: auto;
-                padding: 8px;
-            }
-            #lazyfisher-panel-body::-webkit-scrollbar {
-                width: 4px;
-            }
-            #lazyfisher-panel-body::-webkit-scrollbar-thumb {
-                background: rgba(100, 150, 255, 0.3);
-                border-radius: 2px;
-            }
-
-            .lazyfisher-toggle-row {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 8px 12px;
-                margin: 2px 0;
-                border-radius: 6px;
-                transition: background 0.2s;
-                color: #ccc;
-                font-size: 13px;
-            }
-            .lazyfisher-toggle-row:hover {
-                background: rgba(255,255,255,0.05);
-            }
-
-            .lazyfisher-toggle-switch {
-                position: relative;
-                width: 40px;
-                height: 22px;
-                flex-shrink: 0;
-            }
-            .lazyfisher-toggle-switch input {
-                opacity: 0;
-                width: 0;
-                height: 0;
-            }
-            .lazyfisher-toggle-slider {
-                position: absolute;
-                inset: 0;
-                background: #444;
-                border-radius: 22px;
-                cursor: pointer;
-                transition: background 0.3s;
-            }
-            .lazyfisher-toggle-slider::before {
-                content: '';
-                position: absolute;
-                width: 16px;
-                height: 16px;
-                left: 3px;
-                bottom: 3px;
-                background: #fff;
-                border-radius: 50%;
-                transition: transform 0.3s;
-            }
-            .lazyfisher-toggle-switch input:checked + .lazyfisher-toggle-slider {
-                background: #3a8fd4;
-            }
-            .lazyfisher-toggle-switch input:checked + .lazyfisher-toggle-slider::before {
-                transform: translateX(18px);
-            }
-        `;
-        document.head.appendChild(style);
-    }
+    var style = document.createElement('style');
+    style.id = 'lazyfisher-floating-panel-style';
+    style.textContent = [
+        '#lazyfisher-toggle-btn {',
+        '  position: fixed;',
+        '  z-index: 99999;',
+        '  width: 52px;',
+        '  height: 52px;',
+        '  border-radius: 50%;',
+        '  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);',
+        '  color: #e0e0e0;',
+        '  font-size: 9px;',
+        '  font-weight: bold;',
+        '  text-align: center;',
+        '  line-height: 52px;',
+        '  cursor: grab;',
+        '  user-select: none;',
+        '  box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 20px rgba(100, 150, 255, 0.2);',
+        '  border: 2px solid rgba(100, 150, 255, 0.4);',
+        '  transition: box-shadow 0.3s, border-color 0.3s;',
+        '  font-family: monospace;',
+        '  letter-spacing: 1px;',
+        '}',
+        '#lazyfisher-toggle-btn:hover {',
+        '  box-shadow: 0 6px 25px rgba(0,0,0,0.6), 0 0 30px rgba(100, 150, 255, 0.4);',
+        '  border-color: rgba(100, 150, 255, 0.7);',
+        '}',
+        '#lazyfisher-toggle-btn:active {',
+        '  cursor: grabbing;',
+        '}',
+        '#lazyfisher-toggle-btn.panel-open {',
+        '  cursor: pointer;',
+        '  opacity: 0;',
+        '  pointer-events: none;',
+        '}',
+        '#lazyfisher-panel {',
+        '  position: fixed;',
+        '  z-index: 99998;',
+        '  width: 300px;',
+        '  max-height: 70vh;',
+        '  background: rgba(20, 20, 40, 0.95);',
+        '  border-radius: 12px;',
+        '  box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 40px rgba(100, 150, 255, 0.15);',
+        '  border: 1px solid rgba(100, 150, 255, 0.3);',
+        '  display: none;',
+        '  flex-direction: column;',
+        '  overflow: hidden;',
+        '  font-family: "Segoe UI", sans-serif;',
+        '}',
+        '#lazyfisher-panel.visible {',
+        '  display: flex;',
+        '}',
+        '#lazyfisher-panel-header {',
+        '  display: flex;',
+        '  justify-content: space-between;',
+        '  align-items: center;',
+        '  padding: 12px 16px;',
+        '  background: rgba(0,0,0,0.3);',
+        '  border-bottom: 1px solid rgba(100, 150, 255, 0.2);',
+        '  cursor: grab;',
+        '  user-select: none;',
+        '}',
+        '#lazyfisher-panel-header:active {',
+        '  cursor: grabbing;',
+        '}',
+        '#lazyfisher-panel-title {',
+        '  color: #a0c0ff;',
+        '  font-size: 14px;',
+        '  font-weight: bold;',
+        '}',
+        '#lazyfisher-panel-count {',
+        '  color: #888;',
+        '  font-size: 11px;',
+        '}',
+        '#lazyfisher-panel-close {',
+        '  width: 24px;',
+        '  height: 24px;',
+        '  border-radius: 50%;',
+        '  background: rgba(255,255,255,0.1);',
+        '  color: #aaa;',
+        '  border: none;',
+        '  cursor: pointer;',
+        '  font-size: 14px;',
+        '  text-align: center;',
+        '  line-height: 24px;',
+        '  transition: all 0.2s;',
+        '}',
+        '#lazyfisher-panel-close:hover {',
+        '  background: rgba(255,80,80,0.3);',
+        '  color: #fff;',
+        '}',
+        '#lazyfisher-panel-body {',
+        '  flex: 1;',
+        '  overflow-y: auto;',
+        '  padding: 8px;',
+        '}',
+        '#lazyfisher-panel-body::-webkit-scrollbar {',
+        '  width: 4px;',
+        '}',
+        '#lazyfisher-panel-body::-webkit-scrollbar-thumb {',
+        '  background: rgba(100, 150, 255, 0.3);',
+        '  border-radius: 2px;',
+        '}',
+        '.lazyfisher-toggle-row {',
+        '  display: flex;',
+        '  justify-content: space-between;',
+        '  align-items: center;',
+        '  padding: 8px 12px;',
+        '  margin: 2px 0;',
+        '  border-radius: 6px;',
+        '  transition: background 0.2s;',
+        '  color: #ccc;',
+        '  font-size: 13px;',
+        '}',
+        '.lazyfisher-toggle-row:hover {',
+        '  background: rgba(255,255,255,0.05);',
+        '}',
+        '.lazyfisher-toggle-switch {',
+        '  position: relative;',
+        '  width: 40px;',
+        '  height: 22px;',
+        '  flex-shrink: 0;',
+        '}',
+        '.lazyfisher-toggle-switch input {',
+        '  opacity: 0;',
+        '  width: 0;',
+        '  height: 0;',
+        '  position: absolute;',
+        '}',
+        '.lazyfisher-toggle-slider {',
+        '  position: absolute;',
+        '  top: 0; left: 0; right: 0; bottom: 0;',
+        '  background: #444;',
+        '  border-radius: 22px;',
+        '  cursor: pointer;',
+        '  transition: background 0.3s;',
+        '}',
+        '.lazyfisher-toggle-slider::before {',
+        '  content: "";',
+        '  position: absolute;',
+        '  width: 16px;',
+        '  height: 16px;',
+        '  left: 3px;',
+        '  bottom: 3px;',
+        '  background: #fff;',
+        '  border-radius: 50%;',
+        '  transition: transform 0.3s;',
+        '}',
+        '.lazyfisher-toggle-switch input:checked + .lazyfisher-toggle-slider {',
+        '  background: #3a8fd4;',
+        '}',
+        '.lazyfisher-toggle-switch input:checked + .lazyfisher-toggle-slider::before {',
+        '  transform: translateX(18px);',
+        '}'
+    ].join('\n');
+    document.head.appendChild(style);
 
     // ============================================================
     // 创建浮动按钮
     // ============================================================
-    const btn = document.createElement('div');
+    var btn = document.createElement('div');
     btn.id = 'lazyfisher-toggle-btn';
     btn.textContent = 'v' + SCRIPT_VERSION;
     btn.title = '点击打开功能开关面板 | 拖拽移动';
@@ -343,115 +338,130 @@ function initFloatingPanel() {
     // ============================================================
     // 创建控制面板
     // ============================================================
-    const panel = document.createElement('div');
+    var panel = document.createElement('div');
     panel.id = 'lazyfisher-panel';
 
-    const header = document.createElement('div');
+    var header = document.createElement('div');
     header.id = 'lazyfisher-panel-header';
-    header.innerHTML = `
-        <span id="lazyfisher-panel-title">⚙ 功能开关</span>
-        <span id="lazyfisher-panel-count"></span>
-        <button id="lazyfisher-panel-close">✕</button>
-    `;
 
-    const body = document.createElement('div');
+    var titleSpan = document.createElement('span');
+    titleSpan.id = 'lazyfisher-panel-title';
+    titleSpan.textContent = '⚙ 功能开关';
+
+    var countSpan = document.createElement('span');
+    countSpan.id = 'lazyfisher-panel-count';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.id = 'lazyfisher-panel-close';
+    closeBtn.textContent = '✕';
+
+    header.appendChild(titleSpan);
+    header.appendChild(countSpan);
+    header.appendChild(closeBtn);
+
+    var body = document.createElement('div');
     body.id = 'lazyfisher-panel-body';
 
-    // 生成开关行
+    panel.appendChild(header);
+    panel.appendChild(body);
+
+    // ============================================================
+    // 构建开关行
+    // ============================================================
     function buildToggleRows() {
         body.innerHTML = '';
-        FEATURES.forEach(f => {
-            const row = document.createElement('div');
+        for (var i = 0; i < FEATURES.length; i++) {
+            var f = FEATURES[i];
+            var row = document.createElement('div');
             row.className = 'lazyfisher-toggle-row';
-            row.innerHTML = `
-                <span>${f.name}</span>
-                <label class="lazyfisher-toggle-switch">
-                    <input type="checkbox" ${isEnabled(f.id) ? 'checked' : ''} data-feature="${f.id}">
-                    <span class="lazyfisher-toggle-slider"></span>
-                </label>
-            `;
+
+            var nameSpan = document.createElement('span');
+            nameSpan.textContent = f.name;
+
+            var label = document.createElement('label');
+            label.className = 'lazyfisher-toggle-switch';
+
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = isEnabled(f.id);
+            checkbox.setAttribute('data-feature', f.id);
+
+            var slider = document.createElement('span');
+            slider.className = 'lazyfisher-toggle-slider';
+
+            label.appendChild(checkbox);
+            label.appendChild(slider);
+            row.appendChild(nameSpan);
+            row.appendChild(label);
             body.appendChild(row);
-        });
+        }
 
         // 绑定事件
-        body.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-            cb.addEventListener('change', function() {
-                const featureId = this.dataset.feature;
-                toggleFeature(featureId);
+        var checkboxes = body.querySelectorAll('input[type="checkbox"]');
+        for (var j = 0; j < checkboxes.length; j++) {
+            checkboxes[j].addEventListener('change', function() {
+                toggleFeature(this.getAttribute('data-feature'));
             });
-        });
+        }
     }
 
     buildToggleRows();
 
-    panel.appendChild(header);
-    panel.appendChild(body);
     document.body.appendChild(btn);
     document.body.appendChild(panel);
 
     // ============================================================
-    // 更新开关计数
+    // 更新计数
     // ============================================================
     function updateCount() {
-        const total = FEATURES.length;
-        const onCount = FEATURES.filter(f => isEnabled(f.id)).length;
-        document.getElementById('lazyfisher-panel-count').textContent = `${onCount}/${total} ON`;
+        var total = FEATURES.length;
+        var onCount = 0;
+        for (var i = 0; i < FEATURES.length; i++) {
+            if (isEnabled(FEATURES[i].id)) onCount++;
+        }
+        countSpan.textContent = onCount + '/' + total + ' ON';
     }
     updateCount();
 
     // ============================================================
-    // 拖拽功能（按钮和面板共用）
+    // 拖拽功能
     // ============================================================
-    function makeDraggable(el, onDragEnd) {
-        let isDragging = false;
-        let startX, startY, origX, origY;
+    function makeDraggable(el, onClick) {
+        var dragging = false;
+        var startX, startY, origLeft, origTop;
 
         el.addEventListener('mousedown', function(e) {
-            // 不拦截开关和关闭按钮的点击
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) {
                 return;
             }
             e.preventDefault();
-            isDragging = true;
+            dragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            origX = el.offsetLeft;
-            origY = el.offsetTop;
+            origLeft = el.offsetLeft;
+            origTop = el.offsetTop;
             el.style.transition = 'none';
         });
 
         document.addEventListener('mousemove', function(e) {
-            if (!isDragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            el.style.left = (origX + dx) + 'px';
-            el.style.top = (origY + dy) + 'px';
+            if (!dragging) return;
+            el.style.left = (origLeft + e.clientX - startX) + 'px';
+            el.style.top = (origTop + e.clientY - startY) + 'px';
         });
 
         document.addEventListener('mouseup', function(e) {
-            if (!isDragging) return;
-            isDragging = false;
+            if (!dragging) return;
+            dragging = false;
             el.style.transition = '';
-
-            const totalMove = Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY);
-            if (totalMove < 5 && onDragEnd) {
-                onDragEnd(e);
+            var dist = Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY);
+            if (dist < 5 && onClick) {
+                onClick();
             }
         });
     }
 
-    // ============================================================
-    // 面板拖拽（通过header）
-    // ============================================================
+    // 面板通过标题栏拖拽
     makeDraggable(panel, null);
-
-    // ============================================================
-    // 按钮拖拽 + 点击打开面板
-    // ============================================================
-    makeDraggable(btn, function(e) {
-        // 点击（未拖动）→ 打开面板
-        openPanel();
-    });
 
     // ============================================================
     // 打开/关闭面板
@@ -460,15 +470,13 @@ function initFloatingPanel() {
         buildToggleRows();
         updateCount();
 
-        // 面板定位在按钮附近
-        const btnRect = btn.getBoundingClientRect();
-        const panelW = 300;
-        const panelH = Math.min(window.innerHeight * 0.7, 500);
+        var btnRect = btn.getBoundingClientRect();
+        var panelW = 300;
+        var panelH = Math.min(window.innerHeight * 0.7, 500);
 
-        let left = btnRect.left;
-        let top = btnRect.bottom + 8;
+        var left = btnRect.left;
+        var top = btnRect.bottom + 8;
 
-        // 确保不超出屏幕
         if (left + panelW > window.innerWidth - 10) {
             left = window.innerWidth - panelW - 10;
         }
@@ -489,7 +497,13 @@ function initFloatingPanel() {
         btn.classList.remove('panel-open');
     }
 
-    document.getElementById('lazyfisher-panel-close').addEventListener('click', function(e) {
+    // 按钮点击打开面板
+    makeDraggable(btn, function() {
+        openPanel();
+    });
+
+    // 关闭按钮
+    closeBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         closePanel();
     });
@@ -508,18 +522,25 @@ function initFloatingPanel() {
     // ============================================================
     btn.style.right = '20px';
     btn.style.bottom = '80px';
-    // 计算实际 left 值用于拖拽
-    const btnRect = btn.getBoundingClientRect();
-    btn.style.left = btnRect.left + 'px';
-    btn.style.top = btnRect.top + 'px';
-    btn.style.right = 'auto';
-    btn.style.bottom = 'auto';
+
+    // 等待布局完成后计算实际位置
+    setTimeout(function() {
+        var rect = btn.getBoundingClientRect();
+        btn.style.left = rect.left + 'px';
+        btn.style.top = rect.top + 'px';
+        btn.style.right = 'auto';
+        btn.style.bottom = 'auto';
+    }, 100);
 
     console.log('[功能开关面板] 已启动 | 版本 v' + SCRIPT_VERSION + ' | ' + FEATURES.length + ' 个功能');
 }
 
+// ============================================================
 // 启动
+// ============================================================
 initFloatingPanel();
+
+// ============================================================
 // 1.路亚软竿惩罚系数模块
 function initLureSoftness() {
         (function LureSoftnessModule() {
@@ -2014,215 +2035,6 @@ function initHookStrength() {
             });
         }
         init();
-    })();
-}
-// 11.公告记录器
-function initAnnounceLogger() {
-    (function() {
-        'use strict';
-        if (!document.getElementById('announce-logger-merged-style')) {
-            const style = document.createElement('style');
-            style.id = 'announce-logger-merged-style';
-            style.textContent = `
-                #announce-logger-panel-merged {
-                    position: fixed;
-                    top: 0;
-                    right: 0;
-                    width: 340px;
-                    height: 100vh;
-                    background: #1e272e;
-                    color: #bdc3c7;
-                    z-index: 9999;
-                    transform: translateX(100%);
-                    transition: transform 0.3s ease;
-                    box-shadow: -3px 0 15px rgba(0,0,0,0.6);
-                    font-family: sans-serif;
-                }
-                #announce-logger-panel-merged .header {
-                    padding: 20px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    border-bottom: 1px solid #2c3e50;
-                }
-                #announce-logger-panel-merged .header h3 {
-                    margin: 0;
-                    color: #ecf0f1;
-                    font-size: 16px;
-                }
-                #announce-logger-panel-merged .close-btn {
-                    background: none;
-                    border: none;
-                    color: #ecf0f1;
-                    font-size: 20px;
-                    cursor: pointer;
-                    line-height: 1;
-                }
-                #announce-logger-list-merged {
-                    overflow-y: auto;
-                    height: calc(100% - 70px);
-                    padding: 10px 20px;
-                    font-size: 14px;
-                }
-                #announce-logger-list-merged .entry {
-                    border-bottom: 1px solid #2c3e50;
-                    padding: 8px 0;
-                }
-                #announce-logger-list-merged .time {
-                    font-size: 0.75em;
-                    color: #7f8c8d;
-                    margin-bottom: 2px;
-                }
-                #announce-logger-list-merged .text {
-                    word-break: break-all;
-                }
-                #announce-logger-empty-merged {
-                    text-align: center;
-                    margin-top: 40px;
-                    color: #7f8c8d;
-                }
-            `;
-            document.head.appendChild(style);
-        }
-        const STORAGE_KEY = 'annc_logs_merged';
-        const MAX_ITEMS = 1000;
-
-        let logs = [];
-        let lastText = '';
-        let panel = null;
-        let listDiv = null;
-
-        function loadLogs() {
-            try {
-                const raw = GM_getValue(STORAGE_KEY);
-                logs = Array.isArray(raw) ? raw : [];
-                if (logs.length > MAX_ITEMS) logs = logs.slice(-MAX_ITEMS);
-            } catch (e) {
-                logs = [];
-            }
-        }
-
-        function saveLogs() {
-            GM_setValue(STORAGE_KEY, logs);
-        }
-
-        function addLog(text) {
-            const clean = text.trim();
-            if (!clean || clean === lastText) return;
-            lastText = clean;
-            logs.push({
-                time: Date.now(),
-                text: clean
-            });
-            if (logs.length > MAX_ITEMS) logs = logs.slice(-MAX_ITEMS);
-            saveLogs();
-            updatePanel();
-        }
-
-        function formatTime(timestamp) {
-            return new Date(timestamp).toLocaleString();
-        }
-
-        function updatePanel() {
-            if (!listDiv) return;
-            if (logs.length === 0) {
-                listDiv.innerHTML = '<div id="announce-logger-empty-merged">暂无记录</div>';
-                return;
-            }
-            const html = logs.slice().reverse().map(log => `
-                <div class="entry">
-                    <div class="time">${escapeHtml(formatTime(log.time))}</div>
-                    <div class="text">${escapeHtml(log.text)}</div>
-                </div>
-            `).join('');
-            listDiv.innerHTML = html;
-        }
-
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-
-        function buildPanel() {
-            if (panel) return;
-            panel = document.createElement('div');
-            panel.id = 'announce-logger-panel-merged';
-            panel.innerHTML = `
-                <div class="header">
-                    <h3>公告记录</h3>
-                    <button class="close-btn">✕</button>
-                </div>
-                <div id="announce-logger-list-merged"></div>
-            `;
-            document.body.appendChild(panel);
-            listDiv = panel.querySelector('#announce-logger-list-merged');
-            panel.querySelector('.close-btn').addEventListener('click', togglePanel);
-            document.addEventListener('click', (e) => {
-                if (panel.style.transform === 'translateX(0px)' &&
-                    !panel.contains(e.target)) {
-                    togglePanel();
-                }
-            });
-        }
-
-        function togglePanel() {
-            if (!panel) buildPanel();
-            const opened = panel.style.transform === 'translateX(0px)';
-            if (opened) {
-                panel.style.transform = 'translateX(100%)';
-                if (listDiv) listDiv.innerHTML = '';
-            } else {
-                updatePanel();
-                panel.style.transform = 'translateX(0px)';
-            }
-        }
-
-        function clearLogs() {
-            logs = [];
-            lastText = '';
-            saveLogs();
-            if (panel && panel.style.transform === 'translateX(0px)') {
-                updatePanel();
-            }
-        }
-
-        function checkBanner() {
-            const span = document.querySelector('.app-announcement-banner span');
-            if (span) addLog(span.textContent);
-        }
-
-        function registerMenuCommands() {
-            const register = (typeof GM_registerMenuCommand === 'function') ? GM_registerMenuCommand :
-                             (typeof GM !== 'undefined' && typeof GM.registerMenuCommand === 'function') ? GM.registerMenuCommand :
-                             null;
-            if (!register) {
-                console.error('[公告记录器] 无法注册菜单命令');
-                return;
-            }
-            register('查看公告记录', togglePanel);
-            register('清空公告记录', clearLogs);
-            console.log('[公告记录器] 菜单命令已注册');
-        }
-
-        // ---- 启动 ----
-        function init() {
-            loadLogs();
-            buildPanel();
-            checkBanner();
-            const bannerEl = document.querySelector('.app-announcement-banner');
-            const targetNode = bannerEl ? bannerEl.parentNode : document.body;
-            const observer = new MutationObserver(() => checkBanner());
-            observer.observe(targetNode, { childList: true, subtree: true, characterData: true });
-            registerMenuCommands();
-            console.log('[公告记录器] 已启动');
-        }
-
-        if (document.readyState === 'complete') {
-            init();
-        } else {
-            window.addEventListener('DOMContentLoaded', init);
-        }
     })();
 }
 // 功能：鱼体力预估体重
@@ -6760,7 +6572,6 @@ function initItemCardEnhance() {
         shopCardEnhance: initShopCardEnhance,
         assemblySim: initAssemblySim,
         hookStrength: initHookStrength,
-        announceLogger: initAnnounceLogger,
         fishWeightPred: initFishWeightPred,
         fishCardGradeColor: initFishCardGradeColor,
         fishCardGlow: initFishCardGlow,
