@@ -14,7 +14,6 @@
 
 (function() {
     'use strict';
-
 // ===== 在线加载 FISH_DATABASE =====
 var FISH_DATABASE = [];
 window.__fishDbReady = false;
