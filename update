@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lazyfisher辅助增强
 // @namespace    https://lazyfisher.toogle.club/
-// @version      0.7
+// @version      0.6.1
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
 // @author       天雨灵泽
 // @match        *://toogle.club:36018/*
@@ -25,7 +25,7 @@ window.__onFishDbReady = function(fn) {
 };
 GM_xmlhttpRequest({
     method: 'GET',
-    url: 'https://raw.githubusercontent.com/lmld-6/lazyfisher.toogle.club.data/refs/heads/main/data_fish',
+    url: 'https://raw.githubusercontent.com/noneghost/lazyfisher.toogle.club.data/refs/heads/main/data_fish',
     onload: function(r) {
         if (r.status === 200) {
             var data = JSON.parse(r.responseText);
@@ -41,79 +41,33 @@ GM_xmlhttpRequest({
         window.__fishDbCallbacks = [];
     }
 });
-// ===== 内嵌 HOOK_STRENGTH_DATA（本地测试，跳过远程请求） =====
-var HOOK_STRENGTH_DATA = [
-    { "name": "MarinerEdge BG-49 · 泰坦终局钩 11/0", "strength": "920" },
-    { "name": "MarinerEdge BG-45 · 涡海王座钩 10/0", "strength": "760" },
-    { "name": "MarinerEdge BG-41 · 深渊大物钩 9/0", "strength": "640" },
-    { "name": "MarinerEdge BG-37 · 海沟王座钩 8/0", "strength": "560" },
-    { "name": "MarinerEdge BG-33 · 远洋大物钩 8/0", "strength": "480" },
-    { "name": "MarinerEdge BG-29 · 利维坦钩 8/0", "strength": "430" },
-    { "name": "HookLab HG-34 · 君临终局单钩 2号", "strength": "420" },
-    { "name": "MarinerEdge BG-25 · 枪鱼钩 7/0", "strength": "380" },
-    { "name": "TriGrip DH-80 · 远洋双钩 8/0", "strength": "380" },
-    { "name": "HookLab HG-30 · 王座统御单钩 2号", "strength": "360" },
-    { "name": "TriGrip ST-88 · 王座爆击三本钩 8/0", "strength": "360" },
-    { "name": "MarinerEdge BG-21 · 巨物钩 5/0", "strength": "330" },
-    { "name": "TriGrip ST-80 · 远洋猎手三本钩 8/0", "strength": "320" },
-    { "name": "TriGrip DH-60 · 远洋双钩 6/0", "strength": "310" },
-    { "name": "HookLab HG-26 · 观潮巨物单钩 1号", "strength": "300" },
-    { "name": "TriGrip ST-70 · 远洋三本钩 7/0", "strength": "300" },
-    { "name": "MarinerEdge BG-17 · 琥珀鱼钩 2/0", "strength": "285" },
-    { "name": "TriGrip ST-60 · 远洋三本钩 6/0", "strength": "280" },
-    { "name": "TriGrip DH-40 · 海湾双钩 4/0", "strength": "275" },
-    { "name": "TriGrip ST-50 · 礁区三本钩 5/0", "strength": "265" },
-    { "name": "MarinerEdge BG-13 · 近海金枪钩 1/0", "strength": "260" },
-    { "name": "HookLab HG-22 · 长局耐压单钩 1号", "strength": "250" },
-    { "name": "TriGrip ST-40 · 海湾三本钩 4/0", "strength": "250" },
-    { "name": "TriGrip DH-20 · 近海双钩 2/0", "strength": "245" },
-    { "name": "MarinerEdge BG-15 · 泰坦远洋大物钩 0号", "strength": "240" },
-    { "name": "TriGrip ST-30 · 爆击三本钩 3/0", "strength": "235" },
-    { "name": "TriGrip ST-20 · 近海三本钩 2/0", "strength": "220" },
-    { "name": "HookLab HG-18 · 王廷竞技单钩 0号", "strength": "210" },
-    { "name": "TriGrip DH-00 · 海潮双钩 0号", "strength": "210" },
-    { "name": "TriGrip ST-10 · 近海三本钩 1/0", "strength": "205" },
-    { "name": "TriGrip ST-00 · 海潮爆击三本钩 0号", "strength": "190" },
-    { "name": "MarinerEdge BG-11 · 远洋大物钩 1号", "strength": "180" },
-    { "name": "HookLab HG-15 · 帝冠竞技单钩 0号", "strength": "170" },
-    { "name": "MarinerEdge BG-07 · 礁区大物钩 2号", "strength": "160" },
-    { "name": "TriGrip ST-01 · 近海爆击三本钩 2号", "strength": "150" },
-    { "name": "HookLab HG-11 · 名流竞技单钩 1号", "strength": "150" },
-    { "name": "TriGrip DH-02 · 近海双钩 2号", "strength": "138" },
-    { "name": "HookLab CH-03 · 强拉圆弯钩 3号", "strength": "128" },
-    { "name": "TriGrip TR-14X · 海钓三本钩 3号", "strength": "120" },
-    { "name": "TriGrip DH-04 · 强拉双钩 4号", "strength": "118" },
-    { "name": "TriGrip TR-06 · 强刺三本钩 6号", "strength": "112" },
-    { "name": "NeedlePoint WG-9 · 沼泽宽腹钩 4号", "strength": "110" },
-    { "name": "NeedlePoint WG-5 · 湿地宽腹钩 5号", "strength": "108" },
-    { "name": "HookLab CH-02 · 圆弯单钩 5号", "strength": "95" },
-    { "name": "TriGrip DH-07 · 双钩 7号", "strength": "88" },
-    { "name": "HookLab CH-04 · 稳挂圆弯钩 6号", "strength": "85" },
-    { "name": "NeedlePoint WG-7 · 宽腹单钩 7号", "strength": "85" },
-    { "name": "TriGrip TR-10 · 三本钩 8号", "strength": "75" },
-    { "name": "HookLab CH-08 · 稳挂圆弯钩 8号", "strength": "72" },
-    { "name": "NeedlePoint NP-M7 · 大物竞技袖钩 11号", "strength": "70" },
-    { "name": "NeedlePoint NP-M9 · 强韧竞技袖钩 10号", "strength": "64" },
-    { "name": "强化单钩 16号", "strength": "60" },
-    { "name": "细条单钩 13号", "strength": "58" },
-    { "name": "TriGrip DH-11 · 双钩 11号", "strength": "58" },
-    { "name": "NeedlePoint NP-M5 · 强化竞技袖钩 9号", "strength": "52" },
-    { "name": "双钩 14号", "strength": "50" },
-    { "name": "竞技袖钩 15号", "strength": "46" },
-    { "name": "强化三本钩 10号", "strength": "40" },
-    { "name": "基础单钩 17号", "strength": "34" },
-    { "name": "NeedlePoint NP-M3 · 竞技袖钩 19号", "strength": "34" },
-    { "name": "基础单钩 18号", "strength": "30" },
-    { "name": "基础三本钩 12号", "strength": "25" },
-    { "name": "细条单钩 20号", "strength": "24" }
-];
-window.HOOK_STRENGTH_DATA = HOOK_STRENGTH_DATA;
-window.__hookStrengthReady = true;
+// ===== 在线加载 HOOK_STRENGTH_DATA =====
+var HOOK_STRENGTH_DATA = [];
+window.__hookStrengthReady = false;
 window.__hookStrengthCallbacks = [];
 window.__onHookStrengthReady = function(fn) {
     if (window.__hookStrengthReady) fn();
     else window.__hookStrengthCallbacks.push(fn);
 };
+GM_xmlhttpRequest({
+    method: 'GET',
+    url: 'https://raw.githubusercontent.com/noneghost/lazyfisher.toogle.club.data/refs/heads/main/HOOK_STRENGTH_DATA',
+    onload: function(r) {
+        if (r.status === 200) {
+            var data = JSON.parse(r.responseText);
+            HOOK_STRENGTH_DATA.push(...data);
+            window.HOOK_STRENGTH_DATA = HOOK_STRENGTH_DATA;
+        }
+        window.__hookStrengthReady = true;
+        window.__hookStrengthCallbacks.forEach(function(fn) { fn(); });
+        window.__hookStrengthCallbacks = [];
+    },
+    onerror: function() {
+        window.__hookStrengthReady = true;
+        window.__hookStrengthCallbacks.forEach(function(fn) { fn(); });
+        window.__hookStrengthCallbacks = [];
+    }
+});
 // ===== 在线加载 ITEM_DATABASE =====
 var ITEM_DATABASE = [];
 window.__itemDbReady = false;
@@ -124,7 +78,7 @@ window.__onItemDbReady = function(fn) {
 };
 GM_xmlhttpRequest({
     method: 'GET',
-    url: 'https://raw.githubusercontent.com/lmld-6/lazyfisher.toogle.club.data/refs/heads/main/ITEM_DATABASE',
+    url: 'https://raw.githubusercontent.com/noneghost/lazyfisher.toogle.club.data/refs/heads/main/ITEM_DATABASE',
     onload: function(r) {
         if (r.status === 200) {
             var data = JSON.parse(r.responseText);
@@ -192,7 +146,7 @@ const FEATURES = [
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-const SCRIPT_VERSION = '0.7';
+const SCRIPT_VERSION = '0.6.1';
 
 function isEnabled(featureId) {
     var val = GM_getValue('feat_' + featureId);
@@ -2123,7 +2077,7 @@ function initHookStrength() {
         function createStrengthTag(strength) {
             const span = document.createElement('span');
             span.className = 'hook-strength-result';
-            span.textContent = `最大张力${strength}`;
+            span.textContent = strength + ' 拉力';
             span.style.cssText = 'color:#64748B;font-weight:bold;margin-left:5px;';
             return span;
         }
