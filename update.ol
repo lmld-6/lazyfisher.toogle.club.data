@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         lazyfisher辅助增强OL
+// @name         lazyfisher辅助增强OL公开版源码
 // @namespace    https://lazyfisher.toogle.club/
 // @version      0.5
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
@@ -141,7 +141,7 @@ const FEATURES = [
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-const SCRIPT_VERSION = '0.5';
+const SCRIPT_VERSION = '0.6';
 
 function isEnabled(featureId) {
     var val = GM_getValue('feat_' + featureId);
@@ -668,18 +668,18 @@ function initFishSort() {
         const STORAGE_KEY = 'fish_sorter_prefs';
 
         // 深海夜幕主题配色
-const THEME = {
-    panelBg:          'rgba(248, 250, 252, 0.75)',
-    panelBorder:      'rgba(56, 189, 248, 0.25)',
-    labelColor:       '#334155',
-    btnDefaultBg:     'rgba(241, 245, 249, 0.6)',
-    btnDefaultColor:  '#334155',
-    btnDefaultBorder: 'rgba(148, 163, 184, 0.5)',
-    btnActiveBg:      '#1e40af',
-    btnActiveColor:   '#ffffff',
-    btnActiveBorder:  '#1e40af',
-    sepColor:         'rgba(148, 163, 184, 0.4)',
-};
+        const THEME = {
+            panelBg:          'rgba(248, 250, 252, 0.75)',
+            panelBorder:      'rgba(56, 189, 248, 0.25)',
+            labelColor:       '#334155',
+            btnDefaultBg:     'rgba(241, 245, 249, 0.6)',
+            btnDefaultColor:  '#334155',
+            btnDefaultBorder: 'rgba(148, 163, 184, 0.5)',
+            btnActiveBg:      '#1e40af',
+            btnActiveColor:   '#ffffff',
+            btnActiveBorder:  '#1e40af',
+            sepColor:         'rgba(148, 163, 184, 0.4)',
+        };
 
         class SortPrefsStore {
             static load() {
@@ -704,59 +704,123 @@ const THEME = {
 
             _buildLookup() {
                 const table = {};
-                if (typeof FISH_DATABASE !== 'undefined') {
-                    if (FISH_DATABASE.content && Array.isArray(FISH_DATABASE.content)) {
-                        FISH_DATABASE.content.forEach(fish => {
-                            if (fish.name) table[fish.name] = fish.details || {};
+                try {
+                    if (typeof FISH_DATABASE !== 'undefined') {
+                        let fishes = [];
+                        if (FISH_DATABASE.content && Array.isArray(FISH_DATABASE.content)) {
+                            fishes = FISH_DATABASE.content;
+                        } else if (Array.isArray(FISH_DATABASE)) {
+                            fishes = FISH_DATABASE;
+                        }
+
+                        fishes.forEach(fish => {
+                            const name = fish.name || fish['名称'];
+                            const details = fish.details || fish['详情'] || {};
+                            if (name) table[name] = details;
                         });
-                    } else if (Array.isArray(FISH_DATABASE)) {
-                        FISH_DATABASE.forEach(fish => {
-                            if (fish['名称']) table[fish['名称']] = fish['详情'] || {};
-                        });
+
+                        console.log(`[鱼群排序] 已加载 ${Object.keys(table).length} 条鱼类数据`);
+                    } else {
+                        console.warn('[鱼群排序] FISH_DATABASE 未定义，基于标签的排序将受限');
                     }
+                } catch (e) {
+                    console.error('[鱼群排序] 加载鱼类数据失败:', e);
                 }
                 return table;
             }
 
-            _getInfo(fishName) { return this.fishLookup[fishName] || {}; }
+            _getInfo(fishName) {
+                return this.fishLookup[fishName] || {};
+            }
 
             isLocked(card) {
                 const btn = card.querySelector('.region-fish-lock-button');
-                return btn && btn.classList.contains('region-fish-lock-button--locked');
+                if (!btn) return false;
+                return btn.classList.contains('region-fish-lock-button--locked') ||
+                       btn.getAttribute('aria-pressed') === 'true' ||
+                       btn.getAttribute('data-locked') === 'true';
             }
 
             getFishName(card) {
                 const nameEl = card.querySelector('.item-name');
-                if (!nameEl) return '';
-                let name = '';
-                for (const node of nameEl.childNodes) {
-                    if (node.nodeType === 3) name += node.textContent;
-                }
-                return name.trim();
+                return nameEl ? nameEl.textContent.trim() : '';
             }
 
             extractWeight(card) {
                 try {
-                    const els = card.querySelectorAll('.text-xs.text-muted');
-                    if (els.length === 0) return 0;
-                    const text = els[els.length - 1].textContent.trim().replace(/[^0-9.]/g, '');
-                    const w = parseFloat(text);
-                    return isNaN(w) ? 0 : w;
-                } catch (e) { return 0; }
+                    const allTexts = card.querySelectorAll('.text-xs.text-muted');
+                    for (let i = allTexts.length - 1; i >= 0; i--) {
+                        const text = allTexts[i].textContent.trim();
+                        if (text && /[\d.,]+kg/i.test(text)) {
+                            const cleaned = text.replace(/,/g, '').replace(/kg/gi, '').trim();
+                            const w = parseFloat(cleaned);
+                            return isNaN(w) ? 0 : w;
+                        }
+                    }
+                    return 0;
+                } catch (e) {
+                    return 0;
+                }
+            }
+
+            extractFishTags(card) {
+                const tags = {};
+                try {
+                    const tagRow = card.querySelector('.fish-tag-row');
+                    if (tagRow) {
+                        const spans = tagRow.querySelectorAll('span[title]');
+                        spans.forEach(span => {
+                            const title = span.getAttribute('title').trim();
+                            const text = span.textContent.trim();
+                            if (title.includes('层')) {
+                                // 水层标记
+                                if (title === '上层') tags.waterLayer = '上层';
+                                else if (title === '中层') tags.waterLayer = '中层';
+                                else if (title === '下层') tags.waterLayer = '下层';
+                            } else {
+                                // 饵料标记（根据背景色区分真饵和拟饵）
+                                const bgColor = span.style.background || '';
+                                if (bgColor.includes('230, 81, 0') || bgColor.includes('rgb(230, 81, 0)')) {
+                                    // 橙色背景 = 真饵
+                                    tags.baits = tags.baits || [];
+                                    tags.baits.push(text);
+                                } else if (bgColor.includes('46, 125, 50') || bgColor.includes('rgb(46, 125, 50)')) {
+                                    // 绿色背景 = 拟饵
+                                    tags.lures = tags.lures || [];
+                                    tags.lures.push(text);
+                                }
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.debug('[鱼群排序] 解析标签失败:', e);
+                }
+                return tags;
             }
 
             sort(cards, mode) {
                 const fishData = cards.map(card => {
                     const name = this.getFishName(card);
-                    const info = this._getInfo(name);
+                    const dbInfo = this._getInfo(name);
+                    const tags = this.extractFishTags(card);
+
                     return {
-                        card, name,
+                        card,
+                        name,
                         weight: this.extractWeight(card),
-                        waterLayer: info['水层'] || null,
-                        bait: info['偏好饵料'] || null,
-                        lure: info['偏好拟饵'] || null,
+                        waterLayer: tags.waterLayer || dbInfo['水层'] || null,
+                        bait: (tags.baits && tags.baits.length > 0) ? tags.baits[0] : (dbInfo['偏好饵料'] || null),
+                        lure: (tags.lures && tags.lures.length > 0) ? tags.lures[0] : (dbInfo['偏好拟饵'] || null),
                     };
                 });
+
+                console.debug(`[鱼群排序] 排序模式: ${SORT_MODE_LABELS[mode]}`, fishData.map(f => ({
+                    name: f.name,
+                    weight: f.weight,
+                    layer: f.waterLayer,
+                    bait: f.bait,
+                    lure: f.lure
+                })));
 
                 switch (mode) {
                     case SORT_MODES.WEIGHT_DESC:
@@ -775,15 +839,17 @@ const THEME = {
                         break;
                     case SORT_MODES.BAIT_TYPE:
                         fishData.sort((a, b) => {
-                            const ba = a.bait || 'zzz', bb = b.bait || 'zzz';
-                            if (ba !== bb) return ba.localeCompare(bb);
+                            const ba = a.bait || 'zzz';
+                            const bb = b.bait || 'zzz';
+                            if (ba !== bb) return ba.localeCompare(bb, 'zh');
                             return b.weight - a.weight;
                         });
                         break;
                     case SORT_MODES.LURE_TYPE:
                         fishData.sort((a, b) => {
-                            const la = a.lure || 'zzz', lb = b.lure || 'zzz';
-                            if (la !== lb) return la.localeCompare(lb);
+                            const la = a.lure || 'zzz';
+                            const lb = b.lure || 'zzz';
+                            if (la !== lb) return la.localeCompare(lb, 'zh');
                             return b.weight - a.weight;
                         });
                         break;
@@ -795,9 +861,18 @@ const THEME = {
 
             execute() {
                 const grid = document.querySelector('.region-fish-grid');
-                if (!grid) return;
+                if (!grid) {
+                    console.warn('[鱼群排序] 未找到网格容器');
+                    return;
+                }
+
                 const cards = Array.from(grid.querySelectorAll('.region-fish-card'));
-                if (cards.length === 0) return;
+                if (cards.length === 0) {
+                    console.debug('[鱼群排序] 无卡片，跳过排序');
+                    return;
+                }
+
+                console.debug(`[鱼群排序] 排序前: ${cards.map(c => `${this.getFishName(c)}=${this.extractWeight(c)}kg`).join(', ')}`);
 
                 this.markAllLockedNames(cards);
 
@@ -807,16 +882,29 @@ const THEME = {
                     else unlocked.push(card);
                 });
 
+                console.debug(`[鱼群排序] 锁定: ${locked.length}个, 未锁定: ${unlocked.length}个`);
+
                 const sortedUnlocked = this.sort(unlocked, this.prefs.sortMode);
                 const lockPos = this.prefs.lockPosition;
 
+                // 使用文档片段批量操作
+                const fragment = document.createDocumentFragment();
+
                 if (lockPos === LOCK_POSITION.TOP) {
-                    locked.forEach(card => grid.appendChild(card));
-                    sortedUnlocked.forEach(({ card }) => grid.appendChild(card));
+                    locked.forEach(card => fragment.appendChild(card));
+                    sortedUnlocked.forEach(({ card }) => fragment.appendChild(card));
                 } else {
-                    sortedUnlocked.forEach(({ card }) => grid.appendChild(card));
-                    locked.forEach(card => grid.appendChild(card));
+                    sortedUnlocked.forEach(({ card }) => fragment.appendChild(card));
+                    locked.forEach(card => fragment.appendChild(card));
                 }
+
+                // 清空并重新填充网格
+                while (grid.firstChild) {
+                    grid.removeChild(grid.firstChild);
+                }
+                grid.appendChild(fragment);
+
+                console.debug(`[鱼群排序] 排序后: ${Array.from(grid.querySelectorAll('.region-fish-card')).map(c => `${this.getFishName(c)}=${this.extractWeight(c)}kg`).join(', ')}`);
 
                 this._justSorted = true;
                 setTimeout(() => { this._justSorted = false; }, 500);
@@ -834,7 +922,9 @@ const THEME = {
                 }
             }
 
-            markAllLockedNames(cards) { cards.forEach(c => this.markLockedName(c)); }
+            markAllLockedNames(cards) {
+                cards.forEach(c => this.markLockedName(c));
+            }
 
             isDataReady() {
                 const cards = document.querySelectorAll('.region-fish-card');
@@ -850,13 +940,18 @@ const THEME = {
 
                 const panel = document.createElement('div');
                 panel.id = 'fish-sort-panel';
-                panel.style.cssText = `
-                    display:flex;flex-wrap:wrap;align-items:center;gap:4px;
-                    margin-bottom:6px;padding:6px 8px;
-                    background:${THEME.panelBg};
-                    border:1px solid ${THEME.panelBorder};
-                    border-radius:6px;font-size:0.78em;
-                `;
+                Object.assign(panel.style, {
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginBottom: '6px',
+                    padding: '6px 8px',
+                    background: THEME.panelBg,
+                    border: `1px solid ${THEME.panelBorder}`,
+                    borderRadius: '6px',
+                    fontSize: '0.78em'
+                });
 
                 const label = document.createElement('span');
                 label.textContent = '排序:';
@@ -866,14 +961,16 @@ const THEME = {
                 const makeBtn = (text, callback) => {
                     const btn = document.createElement('button');
                     btn.textContent = text;
-                    btn.style.cssText = `
-                        padding:2px 7px;
-                        border:1px solid ${THEME.btnDefaultBorder};
-                        border-radius:4px;
-                        background:${THEME.btnDefaultBg};
-                        color:${THEME.btnDefaultColor};
-                        cursor:pointer;font-size:0.75em;white-space:nowrap;
-                    `;
+                    Object.assign(btn.style, {
+                        padding: '2px 7px',
+                        border: `1px solid ${THEME.btnDefaultBorder}`,
+                        borderRadius: '4px',
+                        background: THEME.btnDefaultBg,
+                        color: THEME.btnDefaultColor,
+                        cursor: 'pointer',
+                        fontSize: '0.75em',
+                        whiteSpace: 'nowrap'
+                    });
                     btn.addEventListener('click', callback);
                     panel.appendChild(btn);
                     return btn;
@@ -910,14 +1007,19 @@ const THEME = {
                         (mode && mode === this.prefs.sortMode) ||
                         (btn.textContent === '在上' && this.prefs.lockPosition === LOCK_POSITION.TOP) ||
                         (btn.textContent === '在下' && this.prefs.lockPosition === LOCK_POSITION.BOTTOM);
+
                     if (isActive) {
-                        btn.style.background = THEME.btnActiveBg;
-                        btn.style.color = THEME.btnActiveColor;
-                        btn.style.borderColor = THEME.btnActiveBorder;
+                        Object.assign(btn.style, {
+                            background: THEME.btnActiveBg,
+                            color: THEME.btnActiveColor,
+                            borderColor: THEME.btnActiveBorder
+                        });
                     } else {
-                        btn.style.background = THEME.btnDefaultBg;
-                        btn.style.color = THEME.btnDefaultColor;
-                        btn.style.borderColor = THEME.btnDefaultBorder;
+                        Object.assign(btn.style, {
+                            background: THEME.btnDefaultBg,
+                            color: THEME.btnDefaultColor,
+                            borderColor: THEME.btnDefaultBorder
+                        });
                     }
                 });
             }
@@ -956,7 +1058,11 @@ const THEME = {
                     return;
                 }
                 if (++retries < 20) setTimeout(waitForData, 500);
-                else { sorter.injectPanel(); sorter.execute(); }
+                else {
+                    sorter.injectPanel();
+                    sorter.execute();
+                    console.warn('[鱼群排序] 等待超时，强制初始排序');
+                }
             }
             waitForData();
 
@@ -977,7 +1083,10 @@ const THEME = {
                         if (t.classList && t.classList.contains('region-fish-grid')) {
                             clearTimeout(timer);
                             timer = setTimeout(() => {
-                                if (sorter.isDataReady()) { sorter.injectPanel(); sorter.execute(); }
+                                if (sorter.isDataReady()) {
+                                    sorter.injectPanel();
+                                    sorter.execute();
+                                }
                             }, 600);
                             return;
                         }
@@ -985,7 +1094,10 @@ const THEME = {
                             if (n.nodeType === 1 && (n.classList.contains('region-fish-card') || n.querySelector('.region-fish-card'))) {
                                 clearTimeout(timer);
                                 timer = setTimeout(() => {
-                                    if (sorter.isDataReady()) { sorter.injectPanel(); sorter.execute(); }
+                                    if (sorter.isDataReady()) {
+                                        sorter.injectPanel();
+                                        sorter.execute();
+                                    }
                                 }, 600);
                                 return;
                             }
@@ -995,10 +1107,13 @@ const THEME = {
             });
 
             observer.observe(document.body, {
-                childList: true, subtree: true, attributes: true, attributeFilter: ['class']
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['class']
             });
 
-            console.log('[鱼群排序] 已启动（深海夜幕主题）');
+            console.log('[鱼群排序] 已启动（深海夜幕主题 - 修复版）');
         }
 
         if (document.readyState === 'loading') {
