@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lazyfisher辅助增强OL公开版源码
 // @namespace    https://lazyfisher.toogle.club/
-// @version      0.5
+// @version      0.6.1
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
 // @author       天雨灵泽
 // @match        *://toogle.club:36018/*
@@ -25,7 +25,7 @@ window.__onFishDbReady = function(fn) {
 };
 GM_xmlhttpRequest({
     method: 'GET',
-    url: 'https://raw.githubusercontent.com/lmld-6/lazyfisher.toogle.club.data/refs/heads/main/data_fish',
+    url: 'https://raw.githubusercontent.com/noneghost/lazyfisher.toogle.club.data/refs/heads/main/data_fish',
     onload: function(r) {
         if (r.status === 200) {
             var data = JSON.parse(r.responseText);
@@ -51,11 +51,12 @@ window.__onHookStrengthReady = function(fn) {
 };
 GM_xmlhttpRequest({
     method: 'GET',
-    url: 'https://raw.githubusercontent.com/lmld-6/lazyfisher.toogle.club.data/refs/heads/main/HOOK_STRENGTH_DATA',
+    url: 'https://raw.githubusercontent.com/noneghost/lazyfisher.toogle.club.data/refs/heads/main/HOOK_STRENGTH_DATA',
     onload: function(r) {
         if (r.status === 200) {
             var data = JSON.parse(r.responseText);
             HOOK_STRENGTH_DATA.push(...data);
+            window.HOOK_STRENGTH_DATA = HOOK_STRENGTH_DATA;
         }
         window.__hookStrengthReady = true;
         window.__hookStrengthCallbacks.forEach(function(fn) { fn(); });
@@ -77,7 +78,7 @@ window.__onItemDbReady = function(fn) {
 };
 GM_xmlhttpRequest({
     method: 'GET',
-    url: 'https://raw.githubusercontent.com/lmld-6/lazyfisher.toogle.club.data/refs/heads/main/ITEM_DATABASE',
+    url: 'https://raw.githubusercontent.com/noneghost/lazyfisher.toogle.club.data/refs/heads/main/ITEM_DATABASE',
     onload: function(r) {
         if (r.status === 200) {
             var data = JSON.parse(r.responseText);
@@ -141,7 +142,7 @@ const FEATURES = [
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-const SCRIPT_VERSION = '0.6';
+const SCRIPT_VERSION = '0.6.1';
 
 function isEnabled(featureId) {
     var val = GM_getValue('feat_' + featureId);
@@ -1707,6 +1708,151 @@ function initShopCardEnhance() {
         console.log('[商店卡片增强 v4] 颜色统一#64748B，公式: (齿轮/1.3)×(速度/2.4)');
     })();
 }
+    // 功能：钩子张力标注 v2 -
+// 注册名：initHookStrength
+// ============================================================
+function initHookStrength() {
+    (function() {
+        'use strict';
+
+        let HOOK_NAME_TO_STRENGTH = {};
+        let HOOK_MODEL_TO_STRENGTH = {};
+
+        function initCache() {
+            const data = window.HOOK_STRENGTH_DATA || [];
+            console.log('[鱼钩强度] 加载数据条数:', data.length);
+
+            for (let i = 0; i < data.length; i++) {
+                const item = data[i];
+                if (!item.name || item.strength === undefined) continue;
+
+                const cleanName = hookNormalizeName(item.name);
+                HOOK_NAME_TO_STRENGTH[cleanName] = item.strength;
+
+                const modelMatch = item.name.match(/([A-Z]{1,3}[-\s][A-Z]?\d{1,3}[A-Z]?)/);
+                if (modelMatch) {
+                    HOOK_MODEL_TO_STRENGTH[modelMatch[1]] = item.strength;
+                }
+            }
+
+            console.log('[鱼钩强度] 缓存就绪，名称匹配:', Object.keys(HOOK_NAME_TO_STRENGTH).length, '型号匹配:', Object.keys(HOOK_MODEL_TO_STRENGTH).length);
+        }
+
+        function hookNormalizeName(rawName) {
+            return rawName.trim().replace(/\s+/g, ' ').replace(/·/g, '·');
+        }
+
+        function hookFindStrength(pageHookName) {
+            if (!pageHookName) return null;
+            const pageClean = hookNormalizeName(pageHookName);
+
+            // 精确匹配
+            if (HOOK_NAME_TO_STRENGTH[pageClean] !== undefined) {
+                return HOOK_NAME_TO_STRENGTH[pageClean];
+            }
+
+            // 型号匹配
+            const modelMatch = pageHookName.match(/([A-Z]{1,3}[-\s][A-Z]?\d{1,3}[A-Z]?)/);
+            if (modelMatch && HOOK_MODEL_TO_STRENGTH[modelMatch[1]] !== undefined) {
+                return HOOK_MODEL_TO_STRENGTH[modelMatch[1]];
+            }
+
+            return null;
+        }
+
+        function createStrengthTag(strength) {
+            const span = document.createElement('span');
+            span.className = 'hook-strength-result';
+            span.textContent = '最大张力'+strength;
+            span.style.cssText = 'color:#64748B;font-weight:bold;margin-left:5px;';
+            return span;
+        }
+
+        function enhanceHookCard(card) {
+            if (card.querySelector('.hook-strength-result')) return;
+            const nameElement = card.querySelector('.item-name--multiline');
+            if (!nameElement) return;
+            const hookName = nameElement.textContent.trim();
+            if (!hookName) return;
+            const strength = hookFindStrength(hookName);
+            if (strength === null) return;
+            const metaContainer = card.querySelector('.shop-card-meta');
+            if (!metaContainer) return;
+            metaContainer.appendChild(createStrengthTag(strength));
+        }
+
+        function enhanceEquipmentHeader(header) {
+            if (header.querySelector('.hook-strength-result')) return;
+            const nameElement = header.querySelector('.equipment-item-name');
+            if (!nameElement) return;
+            const hookName = nameElement.textContent.trim();
+            if (!hookName) return;
+            const strength = hookFindStrength(hookName);
+            if (strength === null) return;
+            const metaContainer = header.querySelector('.equipment-item-header-meta');
+            if (!metaContainer) return;
+            metaContainer.appendChild(createStrengthTag(strength));
+        }
+
+        function enhanceLoadoutSlot(slot) {
+            if (slot.querySelector('.hook-strength-result')) return;
+            const label = slot.querySelector('.loadout-slot-label');
+            if (!label || label.textContent.trim() !== '鱼钩') return;
+
+            const nameElement = slot.querySelector('.loadout-slot-name');
+            if (!nameElement) return;
+
+            const hookName = nameElement.textContent.trim();
+            const strength = hookFindStrength(hookName);
+            if (strength === null) return;
+
+            const metaContainer = slot.querySelector('.loadout-slot-meta');
+            if (metaContainer) {
+                metaContainer.appendChild(createStrengthTag(strength));
+            }
+        }
+
+        function hookEnhanceAll() {
+            requestAnimationFrame(() => {
+                const shopCards = document.querySelectorAll('.square-item-card-content');
+                for (let i = 0; i < shopCards.length; i++) {
+                    enhanceHookCard(shopCards[i]);
+                }
+                const headers = document.querySelectorAll('.equipment-item-header');
+                for (let i = 0; i < headers.length; i++) {
+                    enhanceEquipmentHeader(headers[i]);
+                }
+                const slots = document.querySelectorAll('.loadout-slot');
+                for (let i = 0; i < slots.length; i++) {
+                    enhanceLoadoutSlot(slots[i]);
+                }
+            });
+        }
+
+        function init() {
+            // 等待数据就绪后再初始化
+            window.__onHookStrengthReady(function() {
+                initCache();
+                hookEnhanceAll();
+
+                const observer = new MutationObserver(() => {
+                    if (window.__hookStrengthDebounce) {
+                        clearTimeout(window.__hookStrengthDebounce);
+                    }
+                    window.__hookStrengthDebounce = setTimeout(hookEnhanceAll, 50);
+                });
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+
+                console.log('[鱼钩强度] 增强功能已启动');
+            });
+        }
+
+        init();
+    })();
+}
 // 9.装配台模拟器
 function initAssemblySim() {
     (function() {
@@ -2017,21 +2163,23 @@ function initAssemblySim() {
         else main();
     })();
 }
-// 功能：钩子张力标注 v2 -
 // 注册名：initHookStrength
 // ============================================================
 function initHookStrength() {
     (function() {
         'use strict';
 
-        // 直接用全局的 HOOK_STRENGTH_DATA，不再自己声明
         let HOOK_NAME_TO_STRENGTH = {};
         let HOOK_MODEL_TO_STRENGTH = {};
 
         function initCache() {
             const data = window.HOOK_STRENGTH_DATA || [];
+            console.log('[鱼钩强度] 加载数据条数:', data.length);
+
             for (let i = 0; i < data.length; i++) {
                 const item = data[i];
+                if (!item.name || item.strength === undefined) continue;
+
                 const cleanName = hookNormalizeName(item.name);
                 HOOK_NAME_TO_STRENGTH[cleanName] = item.strength;
 
@@ -2040,6 +2188,8 @@ function initHookStrength() {
                     HOOK_MODEL_TO_STRENGTH[modelMatch[1]] = item.strength;
                 }
             }
+
+            console.log('[鱼钩强度] 缓存就绪，名称匹配:', Object.keys(HOOK_NAME_TO_STRENGTH).length, '型号匹配:', Object.keys(HOOK_MODEL_TO_STRENGTH).length);
         }
 
         function hookNormalizeName(rawName) {
@@ -2049,13 +2199,18 @@ function initHookStrength() {
         function hookFindStrength(pageHookName) {
             if (!pageHookName) return null;
             const pageClean = hookNormalizeName(pageHookName);
-            if (HOOK_NAME_TO_STRENGTH[pageClean]) {
+
+            // 精确匹配
+            if (HOOK_NAME_TO_STRENGTH[pageClean] !== undefined) {
                 return HOOK_NAME_TO_STRENGTH[pageClean];
             }
+
+            // 型号匹配
             const modelMatch = pageHookName.match(/([A-Z]{1,3}[-\s][A-Z]?\d{1,3}[A-Z]?)/);
-            if (modelMatch && HOOK_MODEL_TO_STRENGTH[modelMatch[1]]) {
+            if (modelMatch && HOOK_MODEL_TO_STRENGTH[modelMatch[1]] !== undefined) {
                 return HOOK_MODEL_TO_STRENGTH[modelMatch[1]];
             }
+
             return null;
         }
 
@@ -2133,6 +2288,7 @@ function initHookStrength() {
             window.__onHookStrengthReady(function() {
                 initCache();
                 hookEnhanceAll();
+
                 const observer = new MutationObserver(() => {
                     if (window.__hookStrengthDebounce) {
                         clearTimeout(window.__hookStrengthDebounce);
@@ -2143,8 +2299,11 @@ function initHookStrength() {
                     childList: true,
                     subtree: true
                 });
+
+                console.log('[鱼钩强度] 增强功能已启动');
             });
         }
+
         init();
     })();
 }
