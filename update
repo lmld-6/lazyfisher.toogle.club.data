@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lazyfisher辅助增强
 // @namespace    https://lazyfisher.toogle.club/
-// @version      0.7.4
+// @version      0.7.5
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
 // @author       天雨灵泽
 // @match        *://toogle.club:36018/*
@@ -147,7 +147,7 @@ const FEATURES = [
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-const SCRIPT_VERSION = '0.7.4';
+const SCRIPT_VERSION = '0.7.5';
 
 function isEnabled(featureId) {
     var val = GM_getValue('feat_' + featureId);
@@ -6709,25 +6709,27 @@ function initItemCardEnhance() {
 }
 //消耗体力
 // 注册名：initStaminaDrain
+// 注册名：initStaminaDrain
 // ============================================================
 function initStaminaDrain() {
     (function() {
         'use strict';
 
         function calculateDrainRates(fishStamina) {
-            const current = parseInt(fishStamina) || 0;
+            const current = parseFloat(fishStamina) || 0;
             const base = current / 10;
             return {
-                rate0: Math.ceil(base * 1.00),     // 0% 减耗 = 100% 消耗
-                rate20: Math.ceil(base * 0.80),    // -20% 减耗
-                rate86: Math.ceil(base * 0.14),    // -86% 减耗
-                rate95: Math.ceil(base * 0.05)     // -95% 减耗 (最大)
+                rate0: Math.max(1, Math.ceil(base * 1.00)),
+                rate20: Math.max(1, Math.ceil(base * 0.80)),
+                rate86: Math.max(1, Math.ceil(base * 0.14)),
+                rate95: Math.max(1, Math.ceil(base * 0.05))
             };
         }
 
         function createDrainCard(rates, fishStaminaPercent) {
             const card = document.createElement('div');
             card.className = 'fishing-metric-card stamina-drain-card';
+            card.setAttribute('data-drain-card', 'true');
 
             card.innerHTML = `
                 <div class="fishing-metric-header">
@@ -6766,6 +6768,7 @@ function initStaminaDrain() {
                 .stamina-drain-card {
                     border-left: 3px solid #f59e0b;
                     background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 30%, #fff 100%);
+                    order: 5 !important;
                 }
 
                 .drain-rate {
@@ -6812,7 +6815,6 @@ function initStaminaDrain() {
                     transition: width 0.3s ease;
                 }
 
-                /* 移动端适配 */
                 @media (max-width: 640px) {
                     .drain-rate {
                         font-size: 0.75em;
@@ -6823,32 +6825,52 @@ function initStaminaDrain() {
             document.head.appendChild(style);
         }
 
+        function findFishStaminaCard(grid) {
+            // 查找包含"鱼体力"标签的卡片
+            const cards = grid.querySelectorAll(':scope > .fishing-metric-card');
+            for (const card of cards) {
+                const label = card.querySelector('.fishing-metric-label');
+                if (label && label.textContent.includes('鱼体力')) {
+                    return card;
+                }
+            }
+            return null;
+        }
+
+        function getFishStaminaData(fishCard) {
+            const valueEl = fishCard.querySelector('.fishing-metric-value');
+            if (!valueEl) return null;
+
+            const text = valueEl.textContent.trim();
+            const match = text.match(/([\d.]+)\s*\/\s*([\d.]+)/);
+            if (!match) return null;
+
+            return {
+                current: parseFloat(match[1]),
+                max: parseFloat(match[2])
+            };
+        }
+
         function processFishingPanel() {
             const grid = document.querySelector('.fishing-metric-grid');
             if (!grid) return;
 
-            const cards = grid.querySelectorAll(':scope > .fishing-metric-card');
-            if (cards.length < 4) return;
+            const fishCard = findFishStaminaCard(grid);
+            if (!fishCard) return;
 
-            const fishStaminaCard = cards[3];
-            if (!fishStaminaCard) return;
+            const data = getFishStaminaData(fishCard);
+            if (!data) return;
 
-            const valueEl = fishStaminaCard.querySelector('.fishing-metric-value');
-            if (!valueEl) return;
+            const pct = (data.current / data.max * 100).toFixed(2);
+            const rates = calculateDrainRates(data.current);
 
-            const text = valueEl.textContent.trim();
-            const match = text.match(/(\d+)\s*\/\s*(\d+)/);
-            if (!match) return;
+            // 检查消耗卡是否已在鱼体力卡后面
+            let drainCard = fishCard.nextElementSibling;
+            let needsNewCard = true;
 
-            const currentStamina = parseInt(match[1]);
-            const maxStamina = parseInt(match[2]);
-            const fishStaminaPercent = ((currentStamina / maxStamina) * 100).toFixed(2) + '%';
-
-            const rates = calculateDrainRates(currentStamina);
-
-            let drainCard = grid.querySelector('.stamina-drain-card');
-
-            if (drainCard) {
+            if (drainCard && drainCard.classList.contains('stamina-drain-card')) {
+                needsNewCard = false;
+                // 更新现有卡片
                 const rateEls = drainCard.querySelectorAll('.drain-rate');
                 if (rateEls.length === 4) {
                     rateEls[0].textContent = rates.rate0;
@@ -6856,13 +6878,17 @@ function initStaminaDrain() {
                     rateEls[2].textContent = rates.rate86;
                     rateEls[3].textContent = rates.rate95;
                 }
-                const progressBar = drainCard.querySelector('.progress-bar-fill');
-                if (progressBar) {
-                    progressBar.style.width = fishStaminaPercent;
-                }
-            } else {
-                drainCard = createDrainCard(rates, fishStaminaPercent);
-                fishStaminaCard.insertAdjacentElement('afterend', drainCard);
+                const bar = drainCard.querySelector('.progress-bar-fill');
+                if (bar) bar.style.width = pct + '%';
+            }
+
+            if (needsNewCard) {
+                // 移除旧的消耗卡（如果在别的位置）
+                const oldCard = grid.querySelector('.stamina-drain-card');
+                if (oldCard) oldCard.remove();
+
+                drainCard = createDrainCard(rates, pct + '%');
+                fishCard.insertAdjacentElement('afterend', drainCard);
             }
         }
 
