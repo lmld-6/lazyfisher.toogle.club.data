@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lazyfisher辅助增强
 // @namespace    https://lazyfisher.toogle.club/
-// @version      0.7.3
+// @version      0.7.4
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
 // @author       天雨灵泽
 // @match        *://toogle.club:36018/*
@@ -143,10 +143,11 @@ const FEATURES = [
     { id: 'boatMemberSort', name: '船上成员排序' },
     { id: 'EquipmentWeaknessAnalyzer', name: '装备状态' },
     { id: 'HideLoginIdentity', name: '隐藏ID' },
+    { id: 'StaminaDrain', name: '消耗体力' },
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-const SCRIPT_VERSION = '0.7.3';
+const SCRIPT_VERSION = '0.7.4';
 
 function isEnabled(featureId) {
     var val = GM_getValue('feat_' + featureId);
@@ -6706,7 +6707,188 @@ function initItemCardEnhance() {
 
     })();
 }
+//消耗体力
+// 注册名：initStaminaDrain
+// ============================================================
+function initStaminaDrain() {
+    (function() {
+        'use strict';
 
+        function calculateDrainRates(fishStamina) {
+            const current = parseInt(fishStamina) || 0;
+            const base = current / 10;
+            return {
+                rate0: Math.ceil(base * 1.00),     // 0% 减耗 = 100% 消耗
+                rate20: Math.ceil(base * 0.80),    // -20% 减耗
+                rate86: Math.ceil(base * 0.14),    // -86% 减耗
+                rate95: Math.ceil(base * 0.05)     // -95% 减耗 (最大)
+            };
+        }
+
+        function createDrainCard(rates, fishStaminaPercent) {
+            const card = document.createElement('div');
+            card.className = 'fishing-metric-card stamina-drain-card';
+
+            card.innerHTML = `
+                <div class="fishing-metric-header">
+                    <span class="fishing-metric-label">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-battery-warning icon-sm" aria-hidden="true">
+                            <path d="M10 17h.01"></path><path d="M10 7v6"></path>
+                            <path d="M14 7h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2"></path>
+                            <path d="M22 11v2"></path>
+                            <path d="M6 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path>
+                        </svg>
+                        消耗体力
+                    </span>
+                    <span class="fishing-metric-value">
+                        <span class="drain-rate drain-rate-0" title="0% 减少体力压力">${rates.rate0}</span>
+                        <span class="drain-separator">/</span>
+                        <span class="drain-rate drain-rate-20" title="20% 减少体力压力">${rates.rate20}</span>
+                        <span class="drain-separator">/</span>
+                        <span class="drain-rate drain-rate-86" title="86% 减少体力压力">${rates.rate86}</span>
+                        <span class="drain-separator">/</span>
+                        <span class="drain-rate drain-rate-95" title="95% 减少体力压力(最大)">${rates.rate95}</span>
+                    </span>
+                </div>
+                <div class="progress-bar fishing-metric-progress stamina-drain-bar">
+                    <div class="progress-bar-fill progress-bar-fill--warning" style="width: ${fishStaminaPercent};"></div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        function injectStyles() {
+            if (document.getElementById('stamina-drain-styles')) return;
+            const style = document.createElement('style');
+            style.id = 'stamina-drain-styles';
+            style.textContent = `
+                .stamina-drain-card {
+                    border-left: 3px solid #f59e0b;
+                    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 30%, #fff 100%);
+                }
+
+                .drain-rate {
+                    font-weight: 700;
+                    font-size: 0.9em;
+                    padding: 2px 5px;
+                    border-radius: 4px;
+                    transition: all 0.2s;
+                }
+
+                .drain-rate-0 {
+                    color: #78350f;
+                    background: rgba(217, 119, 6, 0.06);
+                    font-weight: 600;
+                }
+
+                .drain-rate-20 {
+                    color: #92400e;
+                    background: rgba(217, 119, 6, 0.1);
+                }
+
+                .drain-rate-86 {
+                    color: #b45309;
+                    background: rgba(245, 158, 11, 0.2);
+                    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4);
+                }
+
+                .drain-rate-95 {
+                    color: #d97706;
+                    background: rgba(245, 158, 11, 0.3);
+                    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5);
+                    font-weight: 800;
+                }
+
+                .drain-separator {
+                    color: #d4a574;
+                    font-weight: 300;
+                    margin: 0 1px;
+                    font-size: 0.8em;
+                }
+
+                .stamina-drain-bar .progress-bar-fill--warning {
+                    background: linear-gradient(90deg, #fbbf24, #f59e0b, #d97706);
+                    transition: width 0.3s ease;
+                }
+
+                /* 移动端适配 */
+                @media (max-width: 640px) {
+                    .drain-rate {
+                        font-size: 0.75em;
+                        padding: 1px 3px;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        function processFishingPanel() {
+            const grid = document.querySelector('.fishing-metric-grid');
+            if (!grid) return;
+
+            const cards = grid.querySelectorAll(':scope > .fishing-metric-card');
+            if (cards.length < 4) return;
+
+            const fishStaminaCard = cards[3];
+            if (!fishStaminaCard) return;
+
+            const valueEl = fishStaminaCard.querySelector('.fishing-metric-value');
+            if (!valueEl) return;
+
+            const text = valueEl.textContent.trim();
+            const match = text.match(/(\d+)\s*\/\s*(\d+)/);
+            if (!match) return;
+
+            const currentStamina = parseInt(match[1]);
+            const maxStamina = parseInt(match[2]);
+            const fishStaminaPercent = ((currentStamina / maxStamina) * 100).toFixed(2) + '%';
+
+            const rates = calculateDrainRates(currentStamina);
+
+            let drainCard = grid.querySelector('.stamina-drain-card');
+
+            if (drainCard) {
+                const rateEls = drainCard.querySelectorAll('.drain-rate');
+                if (rateEls.length === 4) {
+                    rateEls[0].textContent = rates.rate0;
+                    rateEls[1].textContent = rates.rate20;
+                    rateEls[2].textContent = rates.rate86;
+                    rateEls[3].textContent = rates.rate95;
+                }
+                const progressBar = drainCard.querySelector('.progress-bar-fill');
+                if (progressBar) {
+                    progressBar.style.width = fishStaminaPercent;
+                }
+            } else {
+                drainCard = createDrainCard(rates, fishStaminaPercent);
+                fishStaminaCard.insertAdjacentElement('afterend', drainCard);
+            }
+        }
+
+        function init() {
+            injectStyles();
+            processFishingPanel();
+
+            let debounceTimer;
+            const observer = new MutationObserver(() => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(processFishingPanel, 100);
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['style', 'class']
+            });
+
+            console.log('[消耗体力] 模块已启动');
+        }
+
+        setTimeout(init, 1000);
+    })();
+}
 
     // ============================================================
     // 根据开关状态启动功能
@@ -6746,6 +6928,7 @@ function initItemCardEnhance() {
         EquipmentWeaknessAnalyzer: initEquipmentWeaknessAnalyzer,
         HideLoginIdentity: initHideLoginIdentity,
         ItemCardEnhance: initItemCardEnhance,
+        StaminaDrain: initStaminaDrain,
 
     };
 
