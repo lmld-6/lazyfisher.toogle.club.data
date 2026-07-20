@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lazyfisher辅助增强OL公开版源码
 // @namespace    https://lazyfisher.toogle.club/
-// @version      0.6.5
+// @version      0.6.6
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
 // @author       天雨灵泽
 // @match        *://toogle.club:36018/*
@@ -8043,10 +8043,11 @@ const FEATURES = [
     { id: 'EquipmentWeaknessAnalyzer', name: '装备状态' },
     { id: 'HideLoginIdentity', name: '隐藏ID' },
     { id: 'StaminaDrain', name: '消耗体力' },
+    { id: 'FishStats', name: '钓鱼记录长度长度' },
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-const SCRIPT_VERSION = '0.6.5';
+const SCRIPT_VERSION = '0.6.6';
 
 function isEnabled(featureId) {
     var val = GM_getValue('feat_' + featureId);
@@ -14134,7 +14135,166 @@ function initStaminaDrain() {
         setTimeout(init, 1000);
     })();
 }
+// ============================================================
+// 功能：在上鱼记录页面添加鱼类尺寸统计卡片
+// 注册名：initFishStats
+// ============================================================
+function initFishStats() {
+    (function() {
+        'use strict';
 
+        const PANEL_ID = 'lz-fish-stats-card';
+
+        function parseFishData() {
+            const fishMap = {};
+
+            const catchCards = document.querySelectorAll('.message-card--catch');
+
+            catchCards.forEach(function(card) {
+                const titleEl = card.querySelector('.message-title');
+                if (!titleEl) return;
+
+                let fishName = titleEl.textContent.trim();
+                fishName = fishName.replace(/^上鱼：/, '').trim();
+                if (!fishName) return;
+
+                const detailEl = card.querySelector('.text-sm.text-muted.mt-sm');
+                if (!detailEl) return;
+
+                const detailText = detailEl.textContent.trim();
+                const match = detailText.match(/([\d.]+)kg\s*\/\s*([\d.]+)cm/);
+                if (!match) return;
+
+                const weight = parseFloat(match[1]);
+                const length = parseFloat(match[2]);
+
+                if (isNaN(weight) || isNaN(length)) return;
+
+                if (!fishMap[fishName]) {
+                    fishMap[fishName] = {
+                        minLen: length,
+                        maxLen: length,
+                        minWt: weight,
+                        maxWt: weight
+                    };
+                } else {
+                    const data = fishMap[fishName];
+                    data.minLen = Math.min(data.minLen, length);
+                    data.maxLen = Math.max(data.maxLen, length);
+                    data.minWt = Math.min(data.minWt, weight);
+                    data.maxWt = Math.max(data.maxWt, weight);
+                }
+            });
+
+            return fishMap;
+        }
+
+        function createOrUpdatePanel(fishMap) {
+            const sortedFish = Object.keys(fishMap).sort();
+            if (sortedFish.length === 0) return;
+
+            let panel = document.getElementById(PANEL_ID);
+
+            if (!panel) {
+                // 第一次创建
+                panel = document.createElement('div');
+                panel.id = PANEL_ID;
+                panel.className = 'card mt-sm';
+                panel.style.cssText = 'padding:12px 14px;';
+
+                // 标题
+                const header = document.createElement('div');
+                header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
+                header.innerHTML = `<span class="text-sm" style="font-weight:700;">鱼类尺寸统计</span>`;
+                panel.appendChild(header);
+
+                // 内容容器
+                const body = document.createElement('div');
+                body.id = PANEL_ID + '-body';
+                panel.appendChild(body);
+
+                // 底部统计
+                const footer = document.createElement('div');
+                footer.id = PANEL_ID + '-footer';
+                footer.style.cssText = 'margin-top:8px;padding-top:8px;border-top:1px solid rgba(128,128,128,0.2);font-size:0.85em;color:#64748B;';
+                panel.appendChild(footer);
+
+                // 插入到"本次钓行统计"卡片之后
+                const summaryPanel = document.getElementById('catch-summary-panel-v12');
+                if (summaryPanel) {
+                    summaryPanel.parentNode.insertBefore(panel, summaryPanel.nextSibling);
+                } else {
+                    const toolbarCard = document.querySelector('.card.mb-md');
+                    if (toolbarCard) {
+                        toolbarCard.parentNode.insertBefore(panel, toolbarCard.nextSibling);
+                    }
+                }
+            }
+
+            // 更新内容
+            const body = document.getElementById(PANEL_ID + '-body');
+            const footer = document.getElementById(PANEL_ID + '-footer');
+
+            if (body) {
+                body.innerHTML = '';
+                sortedFish.forEach(function(fishName) {
+                    const data = fishMap[fishName];
+
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(128,128,128,0.15);';
+
+                    // 鱼名 - 使用默认颜色
+                    const nameSpan = document.createElement('span');
+                    nameSpan.style.cssText = 'font-weight:600;min-width:120px;font-size:0.9em;';
+                    nameSpan.textContent = fishName;
+
+                    // 长度范围
+                    const sizeSpan = document.createElement('span');
+                    sizeSpan.style.cssText = 'color:#64748B;font-size:0.85em;margin:0 8px;';
+                    sizeSpan.textContent = data.minLen.toFixed(1) + ' - ' + data.maxLen.toFixed(1) + 'cm';
+
+                    // 重量范围
+                    const weightSpan = document.createElement('span');
+                    weightSpan.style.cssText = 'color:#64748B;font-size:0.85em;';
+                    weightSpan.textContent = data.minWt.toFixed(1) + ' - ' + data.maxWt.toFixed(1) + 'kg';
+
+                    row.appendChild(nameSpan);
+                    row.appendChild(sizeSpan);
+                    row.appendChild(weightSpan);
+                    body.appendChild(row);
+                });
+            }
+
+            if (footer) {
+                footer.textContent = '共 ' + sortedFish.length + ' 种鱼';
+            }
+        }
+
+        function updatePanel() {
+            const cards = document.querySelectorAll('.message-card--catch');
+            if (cards.length === 0) {
+                const old = document.getElementById(PANEL_ID);
+                if (old) old.remove();
+                return;
+            }
+
+            const fishMap = parseFishData();
+            if (Object.keys(fishMap).length === 0) return;
+
+            createOrUpdatePanel(fishMap);
+        }
+
+        let timer = null;
+        function init() {
+            updatePanel();
+            timer = setInterval(updatePanel, 2000);
+        }
+        window.addEventListener('beforeunload', function() { if (timer) clearInterval(timer); });
+
+        if (document.readyState === 'complete') init();
+        else window.addEventListener('DOMContentLoaded', init);
+    })();
+}
     // ============================================================
     // 根据开关状态启动功能
     // ============================================================
@@ -14170,6 +14330,7 @@ function initStaminaDrain() {
         HideLoginIdentity: initHideLoginIdentity,
         ItemCardEnhance: initItemCardEnhance,
         StaminaDrain: initStaminaDrain,
+        FishStats: initFishStats,
 
     };
 
