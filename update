@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         lazyfisher辅助增强
 // @namespace    https://lazyfisher.toogle.club/
-// @version      0.7.9
+// @version      0.8.0
 // @description  lazyfisher辅助增强-Pro（功能模块可通过菜单开关控制）
 // @author       天雨灵泽
 // @match        *://toogle.club:36018/*
@@ -8048,10 +8048,11 @@ const FEATURES = [
     { id: 'HideLoginIdentity', name: '隐藏ID' },
     { id: 'StaminaDrain', name: '消耗体力' },
     { id: 'FishStats', name: '钓鱼记录长度长度' },
+    { id: 'FishBiteForce', name: '爆发力、安全拉力' },
     { id: 'ItemCardEnhance', name: '商店饵显示增强' }
 ];
 
-const SCRIPT_VERSION = '0.7.9';
+const SCRIPT_VERSION = '0.8.0';
 
 function isEnabled(featureId) {
     var val = GM_getValue('feat_' + featureId);
@@ -14976,6 +14977,189 @@ function initFishStats() {
     })();
 }
 // ============================================================
+// 功能：船钓鱼群卡片显示爆发拉力与安全拉力（仅显示有K值的鱼）
+// 注册名：initFishBiteForce
+// ============================================================
+function initFishBiteForce() {
+    (function() {
+        'use strict';
+
+        if (typeof FISH_DATABASE === 'undefined') {
+            console.warn('[爆发力显示] 未找到 FISH_DATABASE 数据库');
+            return;
+        }
+
+        // K值表 - 只有这些鱼会显示
+        const K_VALUE_TABLE = {
+            '巨齿鲨': 4.08,
+            '索科洛夫耳齿鲨': 4.41,
+            '斜齿耳齿鲨': 3.908,
+            '丘布特耳齿鲨': 3.973,
+            '剑形邦纳鱼': 2.014,
+            '旋齿鲨': 3.554,
+            '厚齿白垩鲨': 4.097,
+            '邓氏鱼': 1.393,
+            '巨口鲨': 2.603,
+            '下延皱齿鲨': 2.139,
+            '泰坦阿斯特诺鱼': 2.606
+        };
+
+        function getFishAttr(fishName) {
+            if (!FISH_DATABASE) return null;
+
+            // 数组形式：[ { "名称": "...", "能力值": {...} }, ... ]
+            if (Array.isArray(FISH_DATABASE)) {
+                const found = FISH_DATABASE.find(function(f) {
+                    return f && (f.名称 === fishName || f.name === fishName);
+                });
+                if (found) return found;
+            }
+
+            // 对象形式：{ "鱼名": { ... } }
+            if (FISH_DATABASE[fishName]) return FISH_DATABASE[fishName];
+
+            // 模糊匹配
+            if (Array.isArray(FISH_DATABASE)) {
+                const found = FISH_DATABASE.find(function(f) {
+                    if (!f) return false;
+                    const name = f.名称 || f.name;
+                    return name && (name.includes(fishName) || fishName.includes(name));
+                });
+                if (found) return found;
+            }
+
+            return null;
+        }
+
+        function getAbilityValue(attr, key) {
+            if (!attr) return null;
+            const abilities = attr.能力值 || attr.abilities || attr;
+            if (!abilities) return null;
+            const valStr = abilities[key];
+            if (valStr) return parseFloat(valStr);
+            return null;
+        }
+
+        function getFishCoefficient(fishName) {
+            // 检查K值表
+            if (K_VALUE_TABLE.hasOwnProperty(fishName)) {
+                return K_VALUE_TABLE[fishName];
+            }
+            return null; // 没有K值，返回null
+        }
+
+        function calculateBiteForce(weight, s, n, a, k) {
+            const A = Math.max(a, 2.5);
+            const F = 0.0449 * Math.pow(weight, 0.58) * (s * n / A) * k;
+            const safeForce = 1.1 * F;
+            return {
+                F: Math.round(F),
+                safe: Math.round(safeForce)
+            };
+        }
+
+        function parseWeight(text) {
+            const cleanText = text.replace(/,/g, '').replace(/\s/g, '');
+
+            // 范围格式：1,500kg–4,000kg 或 1500kg-4000kg
+            const rangeMatch = cleanText.match(/([\d.]+)kg[–\-~～]([\d.]+)kg/);
+            if (rangeMatch) {
+                const w1 = parseFloat(rangeMatch[1]);
+                const w2 = parseFloat(rangeMatch[2]);
+                if (!isNaN(w1) && !isNaN(w2)) {
+                    return Math.max(w1, w2);
+                }
+            }
+
+            // 单个重量格式：4,000kg
+            const match = cleanText.match(/([\d.]+)\s*kg/);
+            if (match) return parseFloat(match[1]);
+            return null;
+        }
+
+        function processCard(card) {
+            if (card.classList.contains('lz-bite-force-done')) return;
+            card.classList.add('lz-bite-force-done');
+
+            const nameEl = card.querySelector('.item-name');
+            if (!nameEl) return;
+            const fishName = nameEl.textContent.trim();
+
+            // 检查是否有K值
+            const k = getFishCoefficient(fishName);
+            if (k === null) {
+                // 没有K值，不显示
+                return;
+            }
+
+            const infoEls = card.querySelectorAll('.text-xs.text-muted');
+            let weightEl = null;
+            infoEls.forEach(function(el) {
+                if (!weightEl && el.textContent.includes('kg')) {
+                    weightEl = el;
+                }
+            });
+            if (!weightEl) return;
+
+            const weight = parseWeight(weightEl.textContent);
+            if (!weight || isNaN(weight)) return;
+
+            const attr = getFishAttr(fishName);
+            if (!attr) {
+                console.log('[爆发力显示] 数据库未找到:', fishName);
+                return;
+            }
+
+            const s = getAbilityValue(attr, '力量');
+            const n = getAbilityValue(attr, '耐力');
+            const a = getAbilityValue(attr, '敏捷');
+
+            if (s === null || n === null || a === null) {
+                console.log('[爆发力显示] 属性不完整:', fishName, { s, n, a });
+                return;
+            }
+
+            const result = calculateBiteForce(weight, s, n, a, k);
+
+            // 两行显示
+            const wrapper = document.createElement('div');
+            wrapper.className = 'lz-bite-force';
+            wrapper.style.cssText = 'margin-top:2px;line-height:1.4;';
+
+            const forceRow = document.createElement('div');
+            forceRow.className = 'text-xs text-muted';
+            forceRow.innerHTML = `爆发拉力 <strong style="color:#FF0000;">${result.F}</strong>`;
+
+            const safeRow = document.createElement('div');
+            safeRow.className = 'text-xs text-muted';
+            safeRow.innerHTML = `安全拉力 <strong style="color:#0066FF;">${result.safe}</strong>`;
+
+            wrapper.appendChild(forceRow);
+            wrapper.appendChild(safeRow);
+            weightEl.parentNode.insertBefore(wrapper, weightEl.nextSibling);
+        }
+
+        function updateAllCards() {
+            const cards = document.querySelectorAll('.region-fish-card');
+            cards.forEach(processCard);
+        }
+
+        function init() {
+            updateAllCards();
+            const observer = new MutationObserver(function() {
+                updateAllCards();
+            });
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+
+        if (document.readyState === 'complete') init();
+        else window.addEventListener('DOMContentLoaded', init);
+    })();
+}
+// ============================================================
     // 根据开关状态启动功能
     // ============================================================
     const INIT_MAP = {
@@ -15015,6 +15199,7 @@ function initFishStats() {
         ItemCardEnhance: initItemCardEnhance,
         StaminaDrain: initStaminaDrain,
         FishStats: initFishStats,
+        FishBiteForce: initFishBiteForce,
 
 
     };
